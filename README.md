@@ -16,6 +16,49 @@
 
 ---
 
+## Example User Interface
+
+```Terminal
+Folder: House.of.the.Dragon.S02E04.iNTERNAL.1080p.WEB.H264-NHTFS => TV SHOW detected.
+  Checking episode: series='house of the dragon', season=2, ep=4
+  => ALL episodes found in Plex. Safe to remove.
+  Delete this TV folder? (y/N) y
+  Folder removed.
+
+Folder: Silo S02E05 Descent ATVP WEB-DL AAC2 0 H 264-BTW => TV SHOW detected.
+  Checking episode: series='Silo', season=2, ep=5
+  => Episode S2E5 NOT in Plex. Keeping folder.
+  => Some or all episodes missing. Keeping folder.
+
+Folder: Upload.S03E08.1080p.WEB.h264-ETHEL => TV SHOW detected.
+  Checking episode: series='Upload', season=3, ep=8
+  => ALL episodes found in Plex. Safe to remove.
+  Delete this TV folder? (y/N) y
+  Folder removed.
+
+Folder: Remnant 2024 1080p AMZN WEB-DL DDP5 1 H 264-FLUX => MOVIE detected. title='Remnant', year=2024
+  => NOT found in Plex. Keeping folder.
+
+Folder: Family.Guy.S15E11.Gronkowsbees.720p.HEVC.x265-MeGusta => TV SHOW detected.
+  Checking episode: series='Family Guy', season=15, ep=11
+  => ALL episodes found in Plex. Safe to remove.
+  Delete this TV folder? (y/N) y
+  Folder removed.
+
+Folder: When Calls The Heart S02 WEBRip EAC3 5 1 1080p x265-iVy => TV SHOW detected.
+  Checking episode: series='When Calls The Heart', season=2, ep=4
+  Checking episode: series='When Calls The Heart', season=2, ep=6
+  Checking episode: series='When Calls The Heart', season=2, ep=7
+  Checking episode: series='When Calls The Heart', season=2, ep=1
+  Checking episode: series='When Calls The Heart', season=2, ep=3
+  Checking episode: series='When Calls The Heart', season=2, ep=2
+  Checking episode: series='When Calls The Heart', season=2, ep=5
+  => ALL episodes found in Plex. Safe to remove.
+  Delete this TV folder? (y/N) y
+```
+
+---
+
 ## Installation
 
 ### Requirements
@@ -34,15 +77,11 @@
 
 2. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install guessit plexapi
    ```
 
 3. Configure the script (see Configuration section below).
 
-4. Run the script:
-   ```bash
-   ./media_maid.py
-   ```
 
 ---
 
@@ -117,18 +156,8 @@ Media-Maid uses hardcoded configuration values, which can be edited directly in 
 
 ## Contributing
 
-Contributions are welcome! To contribute:
-
-1. Fork the repository.
-2. Create a new branch:
-   ```bash
-   git checkout -b feature/my-feature
-   ```
-3. Commit your changes:
-   ```bash
-   git commit -m "Add new feature"
-   ```
-4. Push to your fork and submit a pull request.
+Its definatey not perfect. 
+Contributions are welcome!
 
 ---
 
