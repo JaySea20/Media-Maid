@@ -6,7 +6,7 @@
 
 ## Features
 
-- **Deluge Folder Skipping**: Automatically skips folders still being downloaded via Deluge to avoid conflicts.
+- **Deluge Folder Skipping**: Automatically skips folders still in Deluge to avoid conflicts.
 - **Plex Library Integration**: Checks whether movies or TV episodes are already present in your Plex library.
 - **Media Analysis**: Uses `guessit` to analyze folder and file names, determining whether the content is a movie or TV show.
 - **Selective Deletion**: Provides an option to safely delete media files that are confirmed to be in Plex.
