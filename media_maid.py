@@ -2,7 +2,7 @@
 """
 media_maid.py
 ---------------------
-1) Skip folders that are still in Deluge (from deluge_torrent_names.txt).
+1) Skip folders that are listed in a skip-file (by default: torrent_names.txt).
 2) For each folder in downloads:
    - If folder type is 'movie', check if that movie is in Plex, then optionally delete.
    - If folder type is 'episode', we examine each video file in that folder to see if
@@ -16,11 +16,11 @@ from guessit import guessit
 from plexapi.server import PlexServer
 
 # ----------------- CONFIG -----------------
-DELUGE_TORRENTS_FILE = "/home/user/deluge_torrent_names.txt"
+TORRENTS_FILE = "/home/user/torrent_names.txt"  # Renamed from DELUGE_TORRENTS_FILE
 DATA_DIR = "/home/user/torrents/data"
 
 PLEX_BASEURL = "http://plex.ip.address:32400"  # Plex server URL
-PLEX_TOKEN = "MustHaveToken"     # Replace with your Plex token
+PLEX_TOKEN = "MustHaveToken"                  # Replace with your Plex token
 
 DELETE_CONFIRMED = False  # If True, auto-delete found content. If False, prompt user.
 # ------------------------------------------
@@ -59,7 +59,6 @@ def is_in_plex_show(series_name, season_num, episode_num):
       - 'series_name', 'season_num', 'episode_num'.
     Returns True if found, else False.
     """
-    # Search for the show itself
     results = plex.search(series_name, mediatype='show')
     for show in results:
         if show.type == 'show':
@@ -68,7 +67,6 @@ def is_in_plex_show(series_name, season_num, episode_num):
             guess_title = series_name.lower().replace(":", "").replace("'", "").strip()
 
             if plex_title == guess_title:
-                # If season/episode numbers are available, check them
                 try:
                     found_ep = show.episode(season=season_num, episode=episode_num)
                     if found_ep:
@@ -86,7 +84,7 @@ def check_tv_folder(folder_path):
       - If ALL episodes are found, consider folder safe to remove
     Returns True if folder can be removed, False otherwise.
     """
-    all_found = True  # We'll flip this to False if we find a missing episode
+    all_found = True  
     video_extensions = {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.ts', '.m4v'}
 
     for root, dirs, files in os.walk(folder_path):
@@ -100,7 +98,6 @@ def check_tv_folder(folder_path):
             info = guessit(filename)
 
             if info.get('type') != 'episode':
-                # If guessit doesn't see it as an episode, skip or keep
                 print(f"  [!] File '{filename}' not recognized as an episode. Keeping folder.")
                 return False
 
@@ -108,7 +105,6 @@ def check_tv_folder(folder_path):
             season = info.get('season')
             episode = info.get('episode')
 
-            # If guessit can't parse the needed fields, we keep the folder
             if not series or season is None or episode is None:
                 print(f"  [!] Could not parse series/season/episode from '{filename}'. Keeping folder.")
                 return False
@@ -117,22 +113,20 @@ def check_tv_folder(folder_path):
             if not is_in_plex_show(series, season, episode):
                 print(f"  => Episode S{season}E{episode} NOT in Plex. Keeping folder.")
                 all_found = False
-                # We could return False immediately, but let's keep scanning
-                # in case you want to see which other episodes might be missing.
-                # break # Uncomment to bail early
+                # Could break here, but we continue in case you want to see more missing episodes.
 
     return all_found
 
 def main():
-    # 1) Read the Deluge skip-list
-    if not os.path.isfile(DELUGE_TORRENTS_FILE):
-        print(f"ERROR: Deluge list file not found: {DELUGE_TORRENTS_FILE}")
+    # 1) Read the skip-list
+    if not os.path.isfile(TORRENTS_FILE):
+        print(f"ERROR: Skip-list file not found: {TORRENTS_FILE}")
         return
 
-    with open(DELUGE_TORRENTS_FILE, 'r') as f:
+    with open(TORRENTS_FILE, 'r') as f:
         skip_set = { line.strip() for line in f if line.strip() }
 
-    print("Folders still in Deluge (skip_set):")
+    print("Folders listed in skip-list (skip_set):")
     for name in skip_set:
         print(f"  - {name}")
     print("------------------------------------------------")
@@ -144,17 +138,17 @@ def main():
 
     for entry in os.scandir(DATA_DIR):
         if not entry.is_dir():
-            continue  # Only process directories
+            continue
 
         folder_name = entry.name
         folder_path = entry.path
 
-        # Skip if folder is still in Deluge
+        # Skip if folder is in skip-list
         if folder_name in skip_set:
-            print(f"[SKIP] '{folder_name}' is still in Deluge. Doing nothing.")
+            print(f"[SKIP] '{folder_name}' is in skip-list. Doing nothing.")
             continue
 
-        # Parse with guessit for an initial clue
+        # Initial guessit parse
         info = guessit(folder_name)
         media_type = info.get('type')
 
@@ -162,9 +156,9 @@ def main():
             print(f"[SKIP] Could not determine media type for '{folder_name}'.")
             continue
 
-        # -------------------------------------------------
-        # MOVIE LOGIC
-        # -------------------------------------------------
+        # -------------------------
+        # Movie Logic
+        # -------------------------
         if media_type == 'movie':
             title = info.get('title')
             year = info.get('year')
@@ -173,7 +167,6 @@ def main():
                 continue
 
             print(f"\nFolder: {folder_name} => MOVIE detected. title='{title}', year={year}")
-            # Check Plex
             in_plex = is_in_plex_movie(title, year)
             if in_plex:
                 print("  => Found in Plex library. Safe to remove.")
@@ -190,12 +183,11 @@ def main():
             else:
                 print("  => NOT found in Plex. Keeping folder.")
 
-        # -------------------------------------------------
-        # TV LOGIC
-        # -------------------------------------------------
+        # -------------------------
+        # TV Logic
+        # -------------------------
         elif media_type == 'episode':
             print(f"\nFolder: {folder_name} => TV SHOW detected.")
-            # Let's check each file for episodes
             safe_to_remove = check_tv_folder(folder_path)
             if safe_to_remove:
                 print("  => ALL episodes found in Plex. Safe to remove.")
