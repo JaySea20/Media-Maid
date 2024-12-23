@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 #
 # deluge_list.sh
-# A fully interactive script to list torrents from a Deluge daemon, printing each step to the shell.
+# A fully interactive script to list torrents from a Deluge daemon, printing each step to the shell
+# and also outputting torrent names to a txt file.
+#
 # It uses Python to parse JSON instead of jq.
-# It stores any temporary files and logs in /home/hd33/jaysea20/
+# It stores any temporary files and logs in /home/user/
 
 #######################################
 # Configuration: All writes in HOME_DIR
 #######################################
 HOME_DIR="/home/user"
-COOKIE_FILE="${HOME_DIR}/deluge_cookie.txt"         # File to store session cookie
-LOG_FILE="${HOME_DIR}/deluge_script.log"            # Example log file (if needed)
+COOKIE_FILE="${HOME_DIR}/deluge_cookie.txt"          # File to store session cookie
+LOG_FILE="${HOME_DIR}/deluge_script.log"             # Example log file (if needed)
+TORRENT_NAMES_FILE="${HOME_DIR}/deluge_torrent_names.txt"  # Where to save torrent names
 
 # If you want to store a temp file with a random suffix, you can do:
 # COOKIE_FILE="$(mktemp -p "$HOME_DIR" deluge_cookie.XXXXXX)"
@@ -63,6 +66,7 @@ echo "Deluge Interactive Script starting at $(date)" > "$LOG_FILE"
 echo "Using HOME_DIR: $HOME_DIR" >> "$LOG_FILE"
 echo "COOKIE_FILE: $COOKIE_FILE" >> "$LOG_FILE"
 echo "LOG_FILE: $LOG_FILE" >> "$LOG_FILE"
+echo "TORRENT_NAMES_FILE: $TORRENT_NAMES_FILE" >> "$LOG_FILE"
 echo "==========================================" >> "$LOG_FILE"
 
 #######################################
@@ -223,10 +227,12 @@ echo "$TORRENTS_RESPONSE" | sed 's/^/  /'
 echo "Torrents response (raw JSON):" >> "$LOG_FILE"
 echo "$TORRENTS_RESPONSE" | sed 's/^/  /' >> "$LOG_FILE"
 
-# Now parse and display nicely with Python
+#######################################
+# 5. Parse torrent data & Write to file
+#######################################
 echo
-echo "STEP 5: Parsing and displaying the torrent data."
-echo "STEP 5: Parsing and displaying the torrent data." >> "$LOG_FILE"
+echo "STEP 5: Parsing torrent data and displaying it. Also writing torrent names to file."
+echo "STEP 5: Parsing torrent data and writing to '$TORRENT_NAMES_FILE'." >> "$LOG_FILE"
 
 python3 <<EOF
 import json
@@ -237,33 +243,43 @@ try:
     if not result:
         print("No torrents found or empty result.")
     else:
-        if ${FIELD_CHOICE} == 1:
-            # If user chose 1 (all fields), just pretty-print the entire data
-            print("Displaying ALL fields for each torrent (pretty-printed):")
-            print(json.dumps(result, indent=2))
-        else:
-            # If user chose partial fields, let's show them in a friendlier format
-            print("Displaying partial fields (name, state, progress, speeds):")
-            print("---------------------------------------------------")
-            for torrent_hash, info in result.items():
-                name = info.get("name", "UNKNOWN")
-                state = info.get("state", "UNKNOWN")
-                progress = info.get("progress", 0.0)
-                dl_speed = info.get("download_payload_rate", 0)
-                ul_speed = info.get("upload_payload_rate", 0)
-                print(f"Torrent: {name}")
-                print(f"  Hash: {torrent_hash}")
-                print(f"  State: {state}")
-                print(f"  Progress: {progress}%")
-                print(f"  Download Speed: {dl_speed} B/s")
-                print(f"  Upload Speed:   {ul_speed} B/s")
+        # We'll open the output file and write each torrent name to it
+        with open("${TORRENT_NAMES_FILE}", "w", encoding="utf-8") as name_file:
+            if ${FIELD_CHOICE} == 1:
+                # If user chose 1 (all fields), just pretty-print the entire data to the console
+                print("Displaying ALL fields for each torrent (pretty-printed):")
+                print(json.dumps(result, indent=2))
+                print()
+                print(f"Also writing each torrent name to: ${TORRENT_NAMES_FILE}")
+                for torrent_hash, info in result.items():
+                    name = info.get("name", "UNKNOWN")
+                    name_file.write(name + "\\n")
+            else:
+                # If user chose partial fields, let's show them in a friendlier format
+                print("Displaying partial fields (name, state, progress, speeds):")
                 print("---------------------------------------------------")
+                for torrent_hash, info in result.items():
+                    name = info.get("name", "UNKNOWN")
+                    state = info.get("state", "UNKNOWN")
+                    progress = info.get("progress", 0.0)
+                    dl_speed = info.get("download_payload_rate", 0)
+                    ul_speed = info.get("upload_payload_rate", 0)
+                    print(f"Torrent: {name}")
+                    print(f"  Hash: {torrent_hash}")
+                    print(f"  State: {state}")
+                    print(f"  Progress: {progress}%")
+                    print(f"  Download Speed: {dl_speed} B/s")
+                    print(f"  Upload Speed:   {ul_speed} B/s")
+                    print("---------------------------------------------------")
+
+                    name_file.write(name + "\\n")
+
 except Exception as e:
     print("Failed to parse or retrieve torrents:", e)
 EOF
 
 #######################################
-# 5. Clean up
+# 6. Clean up
 #######################################
 echo
 echo "STEP 6: Cleaning up temporary file(s)."
@@ -277,5 +293,6 @@ fi
 
 echo
 echo "All done! Log written to: $LOG_FILE"
+echo "Torrent names are saved to: $TORRENT_NAMES_FILE"
 echo "Exiting..."
 echo "Script finished at $(date)" >> "$LOG_FILE"
