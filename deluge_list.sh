@@ -1,46 +1,36 @@
 #!/usr/bin/env bash
 #
 # deluge_list.sh
-# A fully interactive script to list torrents from a Deluge daemon, printing each step to the shell
-# and also outputting torrent names to a txt file.
-#
-# It uses Python to parse JSON instead of jq.
-# It stores any temporary files and logs in /home/user/
+# Logs into Deluge, displays torrent info, and writes torrent names to a txt file (torrent_names.txt).
 
 #######################################
-# Configuration: All writes in HOME_DIR
+# Configuration
 #######################################
 HOME_DIR="/home/user"
-COOKIE_FILE="${HOME_DIR}/deluge_cookie.txt"          # File to store session cookie
-LOG_FILE="${HOME_DIR}/deluge_script.log"             # Example log file (if needed)
-TORRENT_NAMES_FILE="${HOME_DIR}/deluge_torrent_names.txt"  # Where to save torrent names
-
-# If you want to store a temp file with a random suffix, you can do:
-# COOKIE_FILE="$(mktemp -p "$HOME_DIR" deluge_cookie.XXXXXX)"
+COOKIE_FILE="${HOME_DIR}/deluge_cookie.txt"
+LOG_FILE="${HOME_DIR}/deluge_script.log"
+TORRENT_NAMES_FILE="${HOME_DIR}/torrent_names.txt"  # Change if desired
 
 #######################################
 # 0. Prompt the user for configuration
 #######################################
-
 echo "===================================="
-echo "     DELUGE INTERACTIVE SCRIPT      "
+echo " DELUGE LIST SCRIPT (TORRENT NAMES) "
 echo "===================================="
 
 # 1) Deluge Web UI host/port
-read -rp "Enter Deluge Web UI address [default: http://127.0.0.1:port]: " DELUGE_HOST
+read -rp "Enter Deluge Web UI address [default: http://127.0.0.1:8112]: " DELUGE_HOST
 if [ -z "$DELUGE_HOST" ]; then
-  DELUGE_HOST="http://127.0.0.1:port"
+  DELUGE_HOST="http://127.0.0.1:8112"
 fi
 
 # 2) Deluge Web UI password
-read -rp "Enter Deluge Web UI password [default: password]: " DELUGE_PASSWORD
+read -rp "Enter Deluge Web UI password [default: deluge]: " DELUGE_PASSWORD
 if [ -z "$DELUGE_PASSWORD" ]; then
-  DELUGE_PASSWORD="password"
+  DELUGE_PASSWORD="deluge"
 fi
 
-# 3) Which fields do we want to see?
-#    - If "all", pass an empty array [] to get everything
-#    - If "some", pass a predefined subset of fields
+# 3) All fields or partial fields?
 echo
 echo "Choose how much torrent info you want to see:"
 echo "1) All fields (full JSON for each torrent)"
@@ -52,17 +42,15 @@ fi
 
 FIELDS_ARRAY=''
 if [ "$FIELD_CHOICE" = "1" ]; then
-  # All fields
   FIELDS_ARRAY="[]"
 else
-  # Some fields
   FIELDS_ARRAY='["name","state","progress","download_payload_rate","upload_payload_rate"]'
 fi
 
 #######################################
 # (Optional) Start a log file
 #######################################
-echo "Deluge Interactive Script starting at $(date)" > "$LOG_FILE"
+echo "Deluge Script starting at $(date)" > "$LOG_FILE"
 echo "Using HOME_DIR: $HOME_DIR" >> "$LOG_FILE"
 echo "COOKIE_FILE: $COOKIE_FILE" >> "$LOG_FILE"
 echo "LOG_FILE: $LOG_FILE" >> "$LOG_FILE"
@@ -70,7 +58,7 @@ echo "TORRENT_NAMES_FILE: $TORRENT_NAMES_FILE" >> "$LOG_FILE"
 echo "==========================================" >> "$LOG_FILE"
 
 #######################################
-# 1. Log in to the Web UI
+# 1. Log in to the Deluge Web UI
 #######################################
 echo
 echo "STEP 1: Logging in to Deluge Web UI at: $DELUGE_HOST"
@@ -90,22 +78,20 @@ LOGIN_RESPONSE=$(
     "${DELUGE_HOST}/json"
 )
 
-# Print the raw login response to the shell and log file
-echo "Login response (raw JSON):"
-echo "$LOGIN_RESPONSE" | sed 's/^/  /'
+# Log the raw response
 echo "Login response (raw JSON):" >> "$LOG_FILE"
 echo "$LOGIN_RESPONSE" | sed 's/^/  /' >> "$LOG_FILE"
 
-# Check if login was successful (using inline Python)
+# Check if login was successful
 LOGIN_RESULT=$(python3 <<EOF
 import sys, json
-data = json.loads("""${LOGIN_RESPONSE}""")
-print(data.get("result"))
+obj = json.loads("""${LOGIN_RESPONSE}""")
+print(obj.get("result"))
 EOF
 )
 
 if [ "${LOGIN_RESULT}" != "True" ]; then
-  echo "ERROR: Login failed (result=${LOGIN_RESULT}). Check your password or Deluge Web settings."
+  echo "ERROR: Login failed (result=${LOGIN_RESULT}). Check password or Deluge Web settings."
   echo "ERROR: Login failed (result=${LOGIN_RESULT})." >> "$LOG_FILE"
   exit 1
 fi
@@ -113,7 +99,7 @@ echo "=> Logged in successfully."
 echo "=> Logged in successfully." >> "$LOG_FILE"
 
 #######################################
-# 2. Get the list of available hosts
+# 2. Retrieve list of daemon hosts
 #######################################
 echo
 echo "STEP 2: Retrieving list of daemon hosts..."
@@ -122,9 +108,9 @@ echo "STEP 2: Retrieving list of daemon hosts..." >> "$LOG_FILE"
 GET_HOSTS_RESPONSE=$(
   curl -s \
     -X POST \
+    --cookie "${COOKIE_FILE}" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json" \
-    --cookie "${COOKIE_FILE}" \
     --data '{
       "method": "web.get_hosts",
       "params": [],
@@ -133,166 +119,126 @@ GET_HOSTS_RESPONSE=$(
     "${DELUGE_HOST}/json"
 )
 
-echo "Hosts response (raw JSON):"
-echo "$GET_HOSTS_RESPONSE" | sed 's/^/  /'
 echo "Hosts response (raw JSON):" >> "$LOG_FILE"
 echo "$GET_HOSTS_RESPONSE" | sed 's/^/  /' >> "$LOG_FILE"
 
-# Extract first host ID using Python
 HOST_ID=$(python3 <<EOF
 import sys, json
 data = json.loads("""${GET_HOSTS_RESPONSE}""")
 hosts = data.get("result", [])
-if hosts and len(hosts[0]) > 0:
-    print(hosts[0][0])
+print(hosts[0][0] if hosts and len(hosts[0])>0 else "")
 EOF
 )
 
-if [ -z "${HOST_ID}" ]; then
-  echo "ERROR: No Deluge daemon hosts found. Make sure you have a running daemon."
+if [ -z "$HOST_ID" ]; then
+  echo "ERROR: No Deluge daemon hosts found."
   echo "ERROR: No Deluge daemon hosts found." >> "$LOG_FILE"
   exit 1
 fi
-echo "=> Found host ID: ${HOST_ID}"
-echo "=> Found host ID: ${HOST_ID}" >> "$LOG_FILE"
+echo "=> Found host ID: $HOST_ID"
+echo "=> Found host ID: $HOST_ID" >> "$LOG_FILE"
 
 #######################################
-# 3. Connect to the host (daemon)
+# 3. Connect to daemon host
 #######################################
 echo
-echo "STEP 3: Connecting to daemon host: ${HOST_ID}"
-echo "STEP 3: Connecting to daemon host: ${HOST_ID}" >> "$LOG_FILE"
+echo "STEP 3: Connecting to daemon host: $HOST_ID"
+echo "STEP 3: Connecting to daemon host: $HOST_ID" >> "$LOG_FILE"
 
 CONNECT_RESPONSE=$(
   curl -s \
     -X POST \
+    --cookie "${COOKIE_FILE}" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json" \
-    --cookie "${COOKIE_FILE}" \
     --data '{
       "method": "web.connect",
-      "params": ["'"${HOST_ID}"'"],
+      "params": ["'"$HOST_ID"'"],
       "id": 3
     }' \
     "${DELUGE_HOST}/json"
 )
 
-echo "Connect response (raw JSON):"
-echo "$CONNECT_RESPONSE" | sed 's/^/  /'
 echo "Connect response (raw JSON):" >> "$LOG_FILE"
 echo "$CONNECT_RESPONSE" | sed 's/^/  /' >> "$LOG_FILE"
 
-# Check if connect was successful or not (optional)
-CONNECT_ERROR=$(python3 <<EOF
-import sys, json
-data = json.loads("""${CONNECT_RESPONSE}""")
-print(data.get("error"))
-EOF
-)
-if [ "${CONNECT_ERROR}" != "None" ]; then
-  echo "WARNING: Something might have gone wrong connecting to the daemon. (error=$CONNECT_ERROR)"
-  echo "WARNING: Something might have gone wrong. (error=$CONNECT_ERROR)" >> "$LOG_FILE"
-fi
-echo "=> Connection command sent."
-echo "=> Connection command sent." >> "$LOG_FILE"
-
 #######################################
-# 4. Fetch and print torrent data
+# 4. Fetch Torrent Data
 #######################################
 echo
 echo "STEP 4: Fetching torrent data..."
 echo "STEP 4: Fetching torrent data..." >> "$LOG_FILE"
-echo "   Fields array = $FIELDS_ARRAY"
-echo "   Fields array = $FIELDS_ARRAY" >> "$LOG_FILE"
 
 TORRENTS_RESPONSE=$(
   curl -s \
     -X POST \
+    --cookie "${COOKIE_FILE}" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json" \
-    --cookie "${COOKIE_FILE}" \
     --data '{
       "method": "core.get_torrents_status",
       "params": [
         {},
-        '"${FIELDS_ARRAY}"'
+        '"$FIELDS_ARRAY"'
       ],
       "id": 4
     }' \
     "${DELUGE_HOST}/json"
 )
 
-echo "Torrents response (raw JSON):"
-echo "$TORRENTS_RESPONSE" | sed 's/^/  /'
-echo "Torrents response (raw JSON):" >> "$LOG_FILE"
+echo "Torrent data (raw JSON) saved to log." >> "$LOG_FILE"
 echo "$TORRENTS_RESPONSE" | sed 's/^/  /' >> "$LOG_FILE"
 
 #######################################
-# 5. Parse torrent data & Write to file
+# 5. Parse & Output to File
 #######################################
 echo
-echo "STEP 5: Parsing torrent data and displaying it. Also writing torrent names to file."
-echo "STEP 5: Parsing torrent data and writing to '$TORRENT_NAMES_FILE'." >> "$LOG_FILE"
+echo "STEP 5: Parsing torrent data, writing names to '$TORRENT_NAMES_FILE'."
+echo "STEP 5: Parsing torrent data, writing names to '$TORRENT_NAMES_FILE'." >> "$LOG_FILE"
 
 python3 <<EOF
-import json
+import sys, json
 
 try:
     data = json.loads("""${TORRENTS_RESPONSE}""")
-    result = data.get("result", {})
-    if not result:
+    torrents = data.get("result", {})
+    if not torrents:
         print("No torrents found or empty result.")
     else:
-        # We'll open the output file and write each torrent name to it
-        with open("${TORRENT_NAMES_FILE}", "w", encoding="utf-8") as name_file:
-            if ${FIELD_CHOICE} == 1:
-                # If user chose 1 (all fields), just pretty-print the entire data to the console
-                print("Displaying ALL fields for each torrent (pretty-printed):")
-                print(json.dumps(result, indent=2))
-                print()
-                print(f"Also writing each torrent name to: ${TORRENT_NAMES_FILE}")
-                for torrent_hash, info in result.items():
-                    name = info.get("name", "UNKNOWN")
-                    name_file.write(name + "\\n")
-            else:
-                # If user chose partial fields, let's show them in a friendlier format
-                print("Displaying partial fields (name, state, progress, speeds):")
-                print("---------------------------------------------------")
-                for torrent_hash, info in result.items():
-                    name = info.get("name", "UNKNOWN")
-                    state = info.get("state", "UNKNOWN")
-                    progress = info.get("progress", 0.0)
-                    dl_speed = info.get("download_payload_rate", 0)
-                    ul_speed = info.get("upload_payload_rate", 0)
-                    print(f"Torrent: {name}")
-                    print(f"  Hash: {torrent_hash}")
-                    print(f"  State: {state}")
-                    print(f"  Progress: {progress}%")
-                    print(f"  Download Speed: {dl_speed} B/s")
-                    print(f"  Upload Speed:   {ul_speed} B/s")
-                    print("---------------------------------------------------")
+        # Save torrent names to file
+        with open("${TORRENT_NAMES_FILE}", "w", encoding="utf-8") as f:
+            for hash_id, info in torrents.items():
+                name = info.get("name", "UNKNOWN")
+                f.write(name + "\\n")
 
-                    name_file.write(name + "\\n")
+        # Optionally print summary
+        if ${FIELD_CHOICE} == 1:
+            print("===> Full JSON (All Fields) <===")
+            print(json.dumps(torrents, indent=2))
+        else:
+            print("===> Partial Fields (name, state, progress, speeds) <===")
+            for h, info in torrents.items():
+                print(f"- {info.get('name','UNKNOWN')}: "
+                      f"State={info.get('state','?')} "
+                      f"Progress={info.get('progress',0)}% "
+                      f"DL={info.get('download_payload_rate',0)}B/s "
+                      f"UL={info.get('upload_payload_rate',0)}B/s")
 
 except Exception as e:
-    print("Failed to parse or retrieve torrents:", e)
+    print("Error parsing torrent data:", e)
 EOF
 
 #######################################
-# 6. Clean up
+# 6. Clean Up
 #######################################
 echo
-echo "STEP 6: Cleaning up temporary file(s)."
-echo "STEP 6: Cleaning up temporary file(s)." >> "$LOG_FILE"
+echo "STEP 6: Cleaning up..."
+echo "STEP 6: Cleaning up..." >> "$LOG_FILE"
 
-if [ -f "$COOKIE_FILE" ]; then
-  rm -f "$COOKIE_FILE"
-  echo "Removed cookie file: $COOKIE_FILE"
-  echo "Removed cookie file: $COOKIE_FILE" >> "$LOG_FILE"
-fi
+rm -f "${COOKIE_FILE}"
 
-echo
-echo "All done! Log written to: $LOG_FILE"
+echo "Removed cookie file: ${COOKIE_FILE}" >> "$LOG_FILE"
 echo "Torrent names are saved to: $TORRENT_NAMES_FILE"
-echo "Exiting..."
-echo "Script finished at $(date)" >> "$LOG_FILE"
+echo "Log written to: $LOG_FILE"
+echo "Done."
+echo "== Finished at $(date) ==" >> "$LOG_FILE"
