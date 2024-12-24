@@ -84,8 +84,10 @@ Folder: When Calls The Heart S02 WEBRip EAC3 5 1 1080p x265-iVy => TV SHOW detec
 
 
 ---
-This Section under development... sorry
-just check the headers of each script. Its pretty self explanitory.
+## Configuration
+
+ - This Section under development... sorry
+ - just check the headers of each script. Its pretty self explanitory.
 ---
 
 ## Example Output
