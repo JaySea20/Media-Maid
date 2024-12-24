@@ -16,7 +16,16 @@ from guessit import guessit
 from plexapi.server import PlexServer
 
 # ----------------- CONFIG -----------------
-TORRENTS_FILE = "/home/user/torrent_names.txt"  # Renamed from DELUGE_TORRENTS_FILE
+
+# Determine the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Output directories (relative to the script's directory)
+TORRENT_OUTPUT_DIR="${SCRIPT_DIR}/torrent_lists"
+
+# Output file for torrent names (within the torrent output directory)
+TORRENT_FILE="${TORRENT_OUTPUT_DIR}/torrent_names.txt"
+
 DATA_DIR = "/home/user/torrents/data"
 
 PLEX_BASEURL = "http://plex.ip.address:32400"  # Plex server URL
