@@ -84,51 +84,8 @@ Folder: When Calls The Heart S02 WEBRip EAC3 5 1 1080p x265-iVy => TV SHOW detec
 
 
 ---
-
-## Configuration
-
-Media-Maid uses hardcoded configuration values, which can be edited directly in the script (`media_maid.py`):
-
-- **Deluge Torrent File**:
-  Path to the text file listing active torrents:
-  ```python
-  DELUGE_TORRENTS_FILE = "/home/user/deluge_torrent_names.txt"
-  ```
-
-- **Data Directory**:
-  Path to your media downloads:
-  ```python
-  DATA_DIR = "/home/user/torrents/data"
-  ```
-
-- **Plex Server Details**:
-  Update your Plex URL and token:
-  ```python
-  PLEX_BASEURL = "http://plex.ip.address:32400"
-  PLEX_TOKEN = "YourPlexTokenHere"
-  ```
-
-- **Delete Confirmation**:
-  Toggle automatic deletion:
-  ```python
-  DELETE_CONFIRMED = False
-  ```
-
----
-
-## Usage
-
-1. Ensure your `DELUGE_TORRENTS_FILE` and `DATA_DIR` are correctly set.
-
-2. Run the script to process media folders:
-   ```bash
-   ./media_maid.py
-   ```
-
-3. Follow on-screen prompts for any manual deletions (if `DELETE_CONFIRMED` is set to `False`).
-
-4. Logs will display skipped folders, media types detected, and any actions taken.
-
+This Section under development... sorry
+just check the headers of each script. Its pretty self explanitory.
 ---
 
 ## Example Output
