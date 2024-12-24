@@ -15,26 +15,33 @@ import shutil
 from guessit import guessit
 from plexapi.server import PlexServer
 
+############################################
 # ----------------- CONFIG -----------------
+############################################
 
-# Determine the directory where the script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Downoload Directory.
+# This is the directory you want to clean
+DATA_DIR = "/home/torrents/data"
 
-# Output directories (relative to the script's directory)
-TORRENT_OUTPUT_DIR="${SCRIPT_DIR}/torrent_lists"
-
-# Output file for torrent names (within the torrent output directory)
-TORRENT_FILE="${TORRENT_OUTPUT_DIR}/torrent_names.txt"
-
-DATA_DIR = "/home/user/torrents/data"
-
-PLEX_BASEURL = "http://plex.ip.address:32400"  # Plex server URL
-PLEX_TOKEN = "MustHaveToken"                  # Replace with your Plex token
+PLEX_BASEURL = "http://url.to.plex:port"  # Plex server URL
+PLEX_TOKEN = "plex_token"                  # Replace with your Plex token
 
 DELETE_CONFIRMED = False  # If True, auto-delete found content. If False, prompt user.
-# ------------------------------------------
+
+############################################
+# ---           DEV Config             ---
+############################################
 
 plex = PlexServer(PLEX_BASEURL, PLEX_TOKEN)
+
+# Determine the directory where the script is located
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Output directories (relative to the script's directory)
+TORRENTS_OUTPUT_DIR = os.path.join(SCRIPT_DIR, "torrent_lists")
+
+# Output file for torrent names (within the torrent output directory)
+TORRENTS_FILE = os.path.join(TORRENTS_OUTPUT_DIR, "torrent_names.txt")
 
 # ------------------------------------------
 # 1) Movie logic
@@ -93,7 +100,7 @@ def check_tv_folder(folder_path):
       - If ALL episodes are found, consider folder safe to remove
     Returns True if folder can be removed, False otherwise.
     """
-    all_found = True  
+    all_found = True
     video_extensions = {'.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.ts', '.m4v'}
 
     for root, dirs, files in os.walk(folder_path):
