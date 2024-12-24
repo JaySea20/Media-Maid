@@ -1,65 +1,77 @@
 #!/usr/bin/env bash
 #
 # deluge_list.sh
-# Logs into Deluge, displays torrent info, and writes torrent names to a txt file (torrent_names.txt).
+# Fetches a list of all torrents from Deluge using the JSON-RPC API and saves their names to a file.
 
-#######################################
-# Configuration
-#######################################
-HOME_DIR="/home/user"
-COOKIE_FILE="${HOME_DIR}/deluge_cookie.txt"
-LOG_FILE="${HOME_DIR}/deluge_script.log"
-TORRENT_NAMES_FILE="${HOME_DIR}/torrent_names.txt"  # Change if desired
+##################################################################
+#                          CONFIGURATION                        #
+##################################################################
 
-#######################################
-# 0. Prompt the user for configuration
-#######################################
-echo "===================================="
-echo " DELUGE LIST SCRIPT (TORRENT NAMES) "
-echo "===================================="
+###############################
+# --- User Configuration ---
+###############################
 
-# 1) Deluge Web UI host/port
-read -rp "Enter Deluge Web UI address [default: http://127.0.0.1:8112]: " DELUGE_HOST
-if [ -z "$DELUGE_HOST" ]; then
-  DELUGE_HOST="http://127.0.0.1:8112"
-fi
+# Base URL of your Deluge JSON-RPC API (ensure correct port and protocol)
+# This uses WEB Port. Not your Daemon port
+DELUGE_HOST="http://url_here:port"
 
-# 2) Deluge Web UI password
-read -rp "Enter Deluge Web UI password [default: deluge]: " DELUGE_PASSWORD
-if [ -z "$DELUGE_PASSWORD" ]; then
-  DELUGE_PASSWORD="deluge"
-fi
+# Password for Deluge authentication
+DELUGE_PASSWORD="deluge_pass"
 
-# 3) All fields or partial fields?
-echo
-echo "Choose how much torrent info you want to see:"
-echo "1) All fields (full JSON for each torrent)"
-echo "2) Only a few fields (name, state, progress, speeds)"
-read -rp "Your choice [1/2, default=2]: " FIELD_CHOICE
-if [ -z "$FIELD_CHOICE" ]; then
-  FIELD_CHOICE=2
-fi
+# Determine the directory where the script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-FIELDS_ARRAY=''
-if [ "$FIELD_CHOICE" = "1" ]; then
-  FIELDS_ARRAY="[]"
-else
-  FIELDS_ARRAY='["name","state","progress","download_payload_rate","upload_payload_rate"]'
-fi
+# Output directories (relative to the script's directory)
+TORRENT_OUTPUT_DIR="${SCRIPT_DIR}/torrent_lists"
+LOG_DIR="${SCRIPT_DIR}/logs"
+TMP_DIR="${SCRIPT_DIR}/tmp"
 
-#######################################
-# (Optional) Start a log file
-#######################################
-echo "Deluge Script starting at $(date)" > "$LOG_FILE"
-echo "Using HOME_DIR: $HOME_DIR" >> "$LOG_FILE"
-echo "COOKIE_FILE: $COOKIE_FILE" >> "$LOG_FILE"
-echo "LOG_FILE: $LOG_FILE" >> "$LOG_FILE"
-echo "TORRENT_NAMES_FILE: $TORRENT_NAMES_FILE" >> "$LOG_FILE"
-echo "==========================================" >> "$LOG_FILE"
+# Output file for torrent names (within the torrent output directory)
+TORRENT_NAMES_FILE="${TORRENT_OUTPUT_DIR}/torrent_names.txt"
 
-#######################################
-# 1. Log in to the Deluge Web UI
-#######################################
+# Log file to record the script's activities (within the logs directory)
+LOG_FILE="${LOG_DIR}/deluge_list.log"
+
+# Deluge JSON-RPC fields to retrieve for each torrent (customize as needed)
+# Example: To retrieve only the 'name' field
+FIELDS_ARRAY='["name"]'
+
+# Field choice for summary output (1 for full JSON, any other number for partial fields)
+FIELD_CHOICE=2
+
+###############################
+# --- Development Config ---
+###############################
+
+# Do not change unless you are sure about the implications.
+
+# Deluge JSON-RPC endpoint
+DELUGE_RPC_URL="${DELUGE_HOST}/json"
+
+# Temporary file to store cookies for session management (within tmp directory)
+COOKIE_FILE="${TMP_DIR}/deluge_cookies.txt"
+
+##################################################################
+#                             SETUP                              #
+##################################################################
+
+###############################
+# --- Setup Commands ---
+###############################
+
+# Ensure the output directories exist. Create them if they don't.
+mkdir -p "${TORRENT_OUTPUT_DIR}"
+mkdir -p "${LOG_DIR}"
+mkdir -p "${TMP_DIR}"
+
+# Initialize or clear the log file
+echo "== Deluge List Script Log ==" > "${LOG_FILE}"
+echo "Script started at $(date)" >> "${LOG_FILE}"
+
+##################################################################
+#               LOGIN TO DELUGE JSON-RPC API                     #
+##################################################################
+
 echo
 echo "STEP 1: Logging in to Deluge Web UI at: $DELUGE_HOST"
 echo "STEP 1: Logging in to Deluge Web UI at: $DELUGE_HOST" >> "$LOG_FILE"
@@ -75,7 +87,9 @@ LOGIN_RESPONSE=$(
       "params": ["'"${DELUGE_PASSWORD}"'"],
       "id": 1
     }' \
-    "${DELUGE_HOST}/json"
+    "${DELUGE_RPC_URL}" \
+    --max-time 15 \
+    --insecure
 )
 
 # Log the raw response
@@ -85,14 +99,22 @@ echo "$LOGIN_RESPONSE" | sed 's/^/  /' >> "$LOG_FILE"
 # Check if login was successful
 LOGIN_RESULT=$(python3 <<EOF
 import sys, json
-obj = json.loads("""${LOGIN_RESPONSE}""")
-print(obj.get("result"))
+try:
+    obj = json.loads("""${LOGIN_RESPONSE}""")
+    result = obj.get("result")
+    if isinstance(result, bool):
+        print("True" if result else "False")
+    else:
+        print("False")
+except:
+    print("False")
 EOF
 )
 
 if [ "${LOGIN_RESULT}" != "True" ]; then
   echo "ERROR: Login failed (result=${LOGIN_RESULT}). Check password or Deluge Web settings."
   echo "ERROR: Login failed (result=${LOGIN_RESULT})." >> "$LOG_FILE"
+  rm -f "${COOKIE_FILE}"
   exit 1
 fi
 echo "=> Logged in successfully."
@@ -116,7 +138,9 @@ GET_HOSTS_RESPONSE=$(
       "params": [],
       "id": 2
     }' \
-    "${DELUGE_HOST}/json"
+    "${DELUGE_RPC_URL}" \
+    --max-time 15 \
+    --insecure
 )
 
 echo "Hosts response (raw JSON):" >> "$LOG_FILE"
@@ -124,15 +148,23 @@ echo "$GET_HOSTS_RESPONSE" | sed 's/^/  /' >> "$LOG_FILE"
 
 HOST_ID=$(python3 <<EOF
 import sys, json
-data = json.loads("""${GET_HOSTS_RESPONSE}""")
-hosts = data.get("result", [])
-print(hosts[0][0] if hosts and len(hosts[0])>0 else "")
+try:
+    data = json.loads("""${GET_HOSTS_RESPONSE}""")
+    hosts = data.get("result", [])
+    if hosts and isinstance(hosts, list):
+        first_host = hosts[0][0] if len(hosts[0]) > 0 else ""
+        print(first_host)
+    else:
+        print("")
+except:
+    print("")
 EOF
 )
 
 if [ -z "$HOST_ID" ]; then
   echo "ERROR: No Deluge daemon hosts found."
   echo "ERROR: No Deluge daemon hosts found." >> "$LOG_FILE"
+  rm -f "${COOKIE_FILE}"
   exit 1
 fi
 echo "=> Found host ID: $HOST_ID"
@@ -156,7 +188,9 @@ CONNECT_RESPONSE=$(
       "params": ["'"$HOST_ID"'"],
       "id": 3
     }' \
-    "${DELUGE_HOST}/json"
+    "${DELUGE_RPC_URL}" \
+    --max-time 15 \
+    --insecure
 )
 
 echo "Connect response (raw JSON):" >> "$LOG_FILE"
@@ -183,7 +217,9 @@ TORRENTS_RESPONSE=$(
       ],
       "id": 4
     }' \
-    "${DELUGE_HOST}/json"
+    "${DELUGE_RPC_URL}" \
+    --max-time 15 \
+    --insecure
 )
 
 echo "Torrent data (raw JSON) saved to log." >> "$LOG_FILE"
@@ -197,7 +233,7 @@ echo "STEP 5: Parsing torrent data, writing names to '$TORRENT_NAMES_FILE'."
 echo "STEP 5: Parsing torrent data, writing names to '$TORRENT_NAMES_FILE'." >> "$LOG_FILE"
 
 python3 <<EOF
-import sys, json
+import json, sys
 
 try:
     data = json.loads("""${TORRENTS_RESPONSE}""")
@@ -216,14 +252,11 @@ try:
             print("===> Full JSON (All Fields) <===")
             print(json.dumps(torrents, indent=2))
         else:
-            print("===> Partial Fields (name, state, progress, speeds) <===")
+            print("===> Partial Fields (name) <===")
             for h, info in torrents.items():
-                print(f"- {info.get('name','UNKNOWN')}: "
-                      f"State={info.get('state','?')} "
-                      f"Progress={info.get('progress',0)}% "
-                      f"DL={info.get('download_payload_rate',0)}B/s "
-                      f"UL={info.get('upload_payload_rate',0)}B/s")
-
+                print(f"- {info.get('name','UNKNOWN')}")
+except json.JSONDecodeError as e:
+    print("Error decoding JSON from Deluge:", e)
 except Exception as e:
     print("Error parsing torrent data:", e)
 EOF
